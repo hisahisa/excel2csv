@@ -1,29 +1,56 @@
-use std::borrow::Cow;
 use chrono::{Duration, NaiveDateTime};
-use quick_xml::name::QName;
-
 
 #[derive( Debug, Clone)]
 pub(crate) struct StructCsv {
     value: String,
-    attr: u8,
-//    attr_v: Cow<'a, [u8]>,
+    attr: u8
 }
 
 impl StructCsv {
-    //pub(crate) fn new (attr: QName<'a>, attr_v: Cow<'a, [u8]>) -> StructCsv<'a> {
     pub(crate) fn new (attr: u8) -> StructCsv {
         StructCsv{
             value: "".to_string(),
-            attr,
-//            attr_v
+            attr
         }
     }
-    // pub(crate) fn setAttr(&mut self, attr: String, attr_v: String) {
-    //     self.attr = attr;
-    //     self.attr_v = attr_v;
-    // }
-    pub(crate) fn setValue(&mut self, val: String) {
+
+    pub(crate) fn set_value(&mut self, val: String) {
         self.value = val;
+    }
+
+    pub(crate) fn get_value(&self, excel_base_date: &NaiveDateTime,
+                            name_resolve: &Vec<Vec<u8>>) -> Vec<u8>{
+        if self.attr == 115u8 {
+            let a = &self.value[..];
+            let date_time_str = &self.excel_date_to_datetime(a, excel_base_date);
+            let b = date_time_str.clone().into_bytes();
+            b
+        } else if self.attr == 116u8 {
+            let i: usize = self.value.parse::<usize>().unwrap();
+            name_resolve[i].clone()
+        } else {
+            let a = self.value.clone().into_bytes();
+            a
+        }
+    }
+
+    fn excel_date_to_datetime(&self, val: &str, excel_base_date: &NaiveDateTime)
+        -> String {
+        // エクセルの数値を日数と秒に分割
+        let days: i64 = val.split('.').next().unwrap().parse().unwrap();
+        let seconds: i64 = ((val.parse::<f64>().unwrap() - days as f64) * 86400.5) as i64;
+
+        // エクセルの基準日に指定された秒数を加算
+        let result = *excel_base_date +
+            Duration::days(days) +
+            Duration::seconds(seconds);
+
+        // 時刻の部分を取得し、文字列としてフォーマット
+        let time_format = result.format(if val.contains('.') {
+            "%Y-%m-%d %H:%M:%S"
+        } else {
+            "%Y-%m-%d"
+        }).to_string();
+        time_format
     }
 }

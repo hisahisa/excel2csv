@@ -22,7 +22,7 @@ fn excel_date_to_datetime(f_val: &str, excel_base_date: NaiveDateTime) -> String
 fn main() {
     // エクセルの基準日 (1900年1月1日)
     let excel_base_date = NaiveDateTime::new(
-        chrono::NaiveDate::from_ymd(1900, 1, 1),
+        chrono::NaiveDate::from_ymd(1970, 12, 30),
         chrono::NaiveTime::from_hms(0, 0, 0));
 
     // エクセルの数値

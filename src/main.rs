@@ -1,27 +1,15 @@
 mod structual;
 
-use std::collections::HashMap;
 use std::fs::File;
 use std::io::Read;
-use quick_xml::events::attributes::{AttrError, Attribute};
 use zip::read::{ZipArchive};
 use quick_xml::Reader;
-use quick_xml::events::{BytesStart, Event};
-use chrono::{Duration, NaiveDateTime};
+use quick_xml::events::Event;
+use chrono::NaiveDateTime;
 use crate::structual::StructCsv;
 
-fn read_xml_inside_zip(zip_path: &str, sheet_name: &str) {
-
-    // excelフォルダ
-    let folder = "xl";
-    // zipファイルを開く
-    let file = File::open(zip_path).unwrap();
-    let mut zip = ZipArchive::new(&file).unwrap();
-    let mut zip_str_sol = ZipArchive::new(&file).unwrap();
-
-    // 名前解決リスト作成
-    let name_resolve = string_resolve_vec(zip_str_sol, folder);
-    println!("Start: {:?}", name_resolve);
+fn read_xml_inside_zip(mut zip: ZipArchive<&File>, folder: &str, sheet_name: &str)
+                       -> Vec<Vec<StructCsv>> {
 
     // 指定されたシート名検索
     let folder2 = "worksheets";
@@ -39,7 +27,7 @@ fn read_xml_inside_zip(zip_path: &str, sheet_name: &str) {
     let mut row: Vec<StructCsv> = Vec::new();
     let mut is_v = false;
     let mut s: Option<StructCsv> = None;
-    let target_attr = vec![115u8, 116u8];
+    let target_attr = vec![115u8, 116u8];  // b"s", b"t"
     loop {
         match xml_reader.read_event_into(&mut buffer) {
             Ok(Event::Start(e)) => {
@@ -48,12 +36,11 @@ fn read_xml_inside_zip(zip_path: &str, sheet_name: &str) {
                         for i in e.attributes() {
                             match i {
                                 Ok(x) => {
-                                    //println!("mp: {:?}", x.key);
                                     let a = if target_attr.
                                         contains(&x.key.into_inner()[0]) {
                                         x.key.into_inner()[0]
                                     } else { 0u8 };
-                                    s = Some(StructCsv::new(a ));
+                                    s = Some(StructCsv::new(a));
                                 }
                                 Err(_) => {}
                             }
@@ -66,6 +53,10 @@ fn read_xml_inside_zip(zip_path: &str, sheet_name: &str) {
             Ok(Event::End(e)) => {
                 match e.name().as_ref() {
                     b"row" => {
+                        let mut x = StructCsv::new(0u8);
+                        let lf = "\n".to_string();
+                        x.set_value(lf);
+                        row.push(x.clone());
                         c_list.push(row);
                         row = Vec::new();
                     },
@@ -77,7 +68,7 @@ fn read_xml_inside_zip(zip_path: &str, sheet_name: &str) {
                     match s {
                         Some(ref mut v) => {
                             let val = e.unescape().unwrap().into_owned();
-                            v.setValue(val);
+                            v.set_value(val);
                             row.push(v.clone());
                             s = None;
                         }
@@ -87,9 +78,8 @@ fn read_xml_inside_zip(zip_path: &str, sheet_name: &str) {
                 }
             }
             Ok(Event::Eof) => {
-                println!("Start: {:?}", c_list);
                 break;
-            },
+            }
             Err(e) => {
                 eprintln!("Error: {}", e);
                 break;
@@ -97,9 +87,10 @@ fn read_xml_inside_zip(zip_path: &str, sheet_name: &str) {
             _ => {}
         }
     }
+    c_list
 }
 
-fn string_resolve_vec(mut zip: ZipArchive<&File>, folder_name: &str) ->  Vec<String> {
+fn string_resolve_vec(mut zip: ZipArchive<&File>, folder_name: &str) ->  Vec<Vec<u8>> {
     let inner_zip_str_file = "sharedStrings.xml";
     let inner_zip_str_path = format!("{}/{}", folder_name, inner_zip_str_file);
     let mut zip_file = zip.by_name(&inner_zip_str_path).unwrap();
@@ -111,7 +102,7 @@ fn string_resolve_vec(mut zip: ZipArchive<&File>, folder_name: &str) ->  Vec<Str
     // 読み取った内容をXMLとして解析して表示
     let mut xml_reader = Reader::from_reader(&content[..]);
     let mut buffer = Vec::new();
-    let mut name_resolve: Vec<String> = Vec::new();
+    let mut name_resolve: Vec<Vec<u8>> = Vec::new();
     let mut is_text = false;
     let mut no_text_ = false;
     loop {
@@ -125,7 +116,7 @@ fn string_resolve_vec(mut zip: ZipArchive<&File>, folder_name: &str) ->  Vec<Str
             }
             Ok(Event::Text(e)) => {
                 if is_text & !no_text_ {
-                    let val = e.unescape().unwrap().into_owned();
+                    let val = e.into_inner().into_owned();
                     name_resolve.push(val);
                     is_text = false;
                     no_text_ = false;
@@ -144,8 +135,8 @@ fn string_resolve_vec(mut zip: ZipArchive<&File>, folder_name: &str) ->  Vec<Str
 
 fn create_navi() -> NaiveDateTime {
     NaiveDateTime::new(
-        chrono::NaiveDate::from_ymd(1900, 1, 1),
-        chrono::NaiveTime::from_hms(0, 0, 0))
+        chrono::NaiveDate::from_ymd_opt(1899, 12, 30).unwrap(),
+        chrono::NaiveTime::from_hms_opt(0, 0, 0).unwrap())
 }
 
 fn main() {
@@ -154,5 +145,24 @@ fn main() {
     let zip_path = "tenpo_shohin_pattern3.xlsx";
     let sheet_name = "sheet1";
 
-    read_xml_inside_zip(zip_path, sheet_name);
+    // excelフォルダ
+    let folder = "xl";
+    // zipファイルを開く
+    let file = File::open(zip_path).unwrap();
+    let zip = ZipArchive::new(&file).unwrap();
+    let zip_str_sol = ZipArchive::new(&file).unwrap();
+
+    // 名前解決リスト作成
+    let name_resolve: Vec<Vec<u8>> = string_resolve_vec(zip_str_sol, folder);
+    println!("Start: {:?}", name_resolve);
+
+    let xml_contents = read_xml_inside_zip(zip, folder, sheet_name);
+    let e = self::create_navi();
+    for i in xml_contents {
+        i.iter().for_each(|a| {
+            let x = &*a.clone().get_value(&e, &name_resolve);
+        })
+    }
+    println!("ok");
+    // println!("xml_contents: {:?}", xml_contents);
 }
