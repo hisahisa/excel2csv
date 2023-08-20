@@ -38,7 +38,7 @@ fn read_xml_inside_zip(mut zip: ZipArchive<&File>, folder: &str, sheet_name: &st
                                 Ok(x) => {
                                     let a = if target_attr.
                                         contains(&x.key.into_inner()[0]) {
-                                        x.key.into_inner()[0]
+                                        x.key.into_inner()[0].clone()
                                     } else { 0u8 };
                                     s = Some(StructCsv::new(a));
                                 }
@@ -53,10 +53,6 @@ fn read_xml_inside_zip(mut zip: ZipArchive<&File>, folder: &str, sheet_name: &st
             Ok(Event::End(e)) => {
                 match e.name().as_ref() {
                     b"row" => {
-                        let mut x = StructCsv::new(0u8);
-                        let lf = "\n".to_string();
-                        x.set_value(lf);
-                        row.push(x.clone());
                         c_list.push(row);
                         row = Vec::new();
                     },
@@ -90,7 +86,7 @@ fn read_xml_inside_zip(mut zip: ZipArchive<&File>, folder: &str, sheet_name: &st
     c_list
 }
 
-fn string_resolve_vec(mut zip: ZipArchive<&File>, folder_name: &str) ->  Vec<Vec<u8>> {
+fn string_resolve_vec(mut zip: ZipArchive<&File>, folder_name: &str) ->  Vec<String> {
     let inner_zip_str_file = "sharedStrings.xml";
     let inner_zip_str_path = format!("{}/{}", folder_name, inner_zip_str_file);
     let mut zip_file = zip.by_name(&inner_zip_str_path).unwrap();
@@ -102,7 +98,7 @@ fn string_resolve_vec(mut zip: ZipArchive<&File>, folder_name: &str) ->  Vec<Vec
     // 読み取った内容をXMLとして解析して表示
     let mut xml_reader = Reader::from_reader(&content[..]);
     let mut buffer = Vec::new();
-    let mut name_resolve: Vec<Vec<u8>> = Vec::new();
+    let mut name_resolve: Vec<String> = Vec::new();
     let mut is_text = false;
     let mut no_text_ = false;
     loop {
@@ -115,8 +111,8 @@ fn string_resolve_vec(mut zip: ZipArchive<&File>, folder_name: &str) ->  Vec<Vec
                 }
             }
             Ok(Event::Text(e)) => {
-                if is_text & !no_text_ {
-                    let val = e.into_inner().into_owned();
+                if &is_text & !&no_text_ {
+                    let val = e.unescape().unwrap().into_owned();
                     name_resolve.push(val);
                     is_text = false;
                     no_text_ = false;
@@ -153,16 +149,18 @@ fn main() {
     let zip_str_sol = ZipArchive::new(&file).unwrap();
 
     // 名前解決リスト作成
-    let name_resolve: Vec<Vec<u8>> = string_resolve_vec(zip_str_sol, folder);
+    let name_resolve: Vec<String> = string_resolve_vec(zip_str_sol, folder);
     println!("Start: {:?}", name_resolve);
 
     let xml_contents = read_xml_inside_zip(zip, folder, sheet_name);
-    let e = self::create_navi();
+    let navi = create_navi();
+    let mut csv_str: Vec<String> = Vec::new();
     for i in xml_contents {
-        i.iter().for_each(|a| {
-            let x = &*a.clone().get_value(&e, &name_resolve);
-        })
+        let res = i.into_iter().map(|a| {
+            a.clone().get_value(&navi, &name_resolve)
+        }).collect::<Vec<String>>().join(",");
+        csv_str.push(res);
     }
     println!("ok");
-    // println!("xml_contents: {:?}", xml_contents);
+    println!("csv_str: {:?}", csv_str.join("\n"));
 }

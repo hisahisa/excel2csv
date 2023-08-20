@@ -19,18 +19,15 @@ impl StructCsv {
     }
 
     pub(crate) fn get_value(&self, excel_base_date: &NaiveDateTime,
-                            name_resolve: &Vec<Vec<u8>>) -> Vec<u8>{
+                            name_resolve: &Vec<String>) -> String{
         if self.attr == 115u8 {
             let a = &self.value[..];
-            let date_time_str = &self.excel_date_to_datetime(a, excel_base_date);
-            let b = date_time_str.clone().into_bytes();
-            b
+            self.excel_date_to_datetime(a, excel_base_date)
         } else if self.attr == 116u8 {
             let i: usize = self.value.parse::<usize>().unwrap();
             name_resolve[i].clone()
         } else {
-            let a = self.value.clone().into_bytes();
-            a
+            self.value.clone()
         }
     }
 
