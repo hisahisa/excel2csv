@@ -25,7 +25,7 @@ impl StructCsv {
             self.excel_date_to_datetime(a, excel_base_date)
         } else if self.attr == 116u8 {
             let i: usize = self.value.parse::<usize>().unwrap();
-            name_resolve[i].clone()
+            format!("\"{}\"", name_resolve[i].clone())
         } else {
             self.value.clone()
         }
